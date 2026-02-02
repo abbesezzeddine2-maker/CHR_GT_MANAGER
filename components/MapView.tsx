@@ -35,7 +35,7 @@ const getMarkerIcon = (division: string | undefined, isSelected: boolean) => {
   });
 };
 
-// Component to handle map center updates
+// Component to handle map center updates safely
 const MapController = ({ 
   center, 
   zoom 
@@ -44,15 +44,32 @@ const MapController = ({
   zoom: number 
 }) => {
   const map = useMap();
+
   useEffect(() => {
-    // Only fly if coordinates are valid finite numbers
-    if (center && Number.isFinite(center[0]) && Number.isFinite(center[1])) {
+    // If center is null or undefined, do nothing
+    if (!center) return;
+
+    // Strict type coercion and validation
+    const lat = Number(center[0]);
+    const lng = Number(center[1]);
+    const z = Number(zoom);
+
+    // Ensure all values are finite numbers
+    if (Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(z)) {
       try {
-        map.flyTo(center, zoom, {
-          duration: 1.5
-        });
+        // Prevent unnecessary moves if already close to target
+        const currentCenter = map.getCenter();
+        const dist = Math.sqrt(Math.pow(currentCenter.lat - lat, 2) + Math.pow(currentCenter.lng - lng, 2));
+        
+        // Only fly if distance is significant or zoom changed
+        if (dist > 0.0001 || Math.abs(map.getZoom() - z) > 0.1) {
+           map.flyTo([lat, lng], z, {
+             duration: 1.5
+           });
+        }
       } catch (e) {
-        console.error("Leaflet FlyTo Error:", e);
+        // Silently catch Leaflet errors to prevent app crash
+        // This usually happens if the map container is not yet ready or values are weird
       }
     }
   }, [center, zoom, map]);
@@ -65,9 +82,9 @@ const LocationMarker = ({ setLocation }: { setLocation: (pos: [number, number]) 
   
   useEffect(() => {
     map.locate().on("locationfound", function (e) {
-      if (e && e.latlng) {
+      if (e && e.latlng && Number.isFinite(e.latlng.lat) && Number.isFinite(e.latlng.lng)) {
         setLocation([e.latlng.lat, e.latlng.lng]);
-        map.flyTo(e.latlng, map.getZoom());
+        // Do NOT call flyTo here. setLocation updates state, which triggers MapController.
       }
     });
   }, [map, setLocation]);
