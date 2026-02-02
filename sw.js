@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'chr-gt-v1';
+const CACHE_NAME = 'chr-gt-v2';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -8,6 +8,7 @@ const urlsToCache = [
 
 // Install SW
 self.addEventListener('install', (event) => {
+  self.skipWaiting(); // Force le nouveau service worker à s'activer immédiatement
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
@@ -44,4 +45,5 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
+  return self.clients.claim(); // Prend le contrôle des pages immédiatement
 });
