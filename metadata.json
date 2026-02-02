@@ -1,0 +1,7 @@
+{
+  "name": "CHR_GT Manager",
+  "description": "A mobile-first route management dashboard for café clients with Google Sheets integration and interactive mapping.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
