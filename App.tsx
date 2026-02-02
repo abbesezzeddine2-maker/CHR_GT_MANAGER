@@ -4,7 +4,7 @@ import Sidebar from './components/Sidebar';
 import MapView from './components/MapView';
 import ClientSheet from './components/ClientSheet';
 import { parseCSV } from './utils/csvHelper';
-import { GOOGLE_SHEET_ID } from './utils/config';
+import { GOOGLE_SHEET_URL } from './utils/config';
 import { Client } from './types';
 
 function App() {
@@ -17,16 +17,14 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   const loadData = async () => {
-    if (!GOOGLE_SHEET_ID || GOOGLE_SHEET_ID.includes('VOTRE_ID')) {
-      console.warn("GOOGLE_SHEET_ID non configuré");
+    if (!GOOGLE_SHEET_URL) {
+      console.warn("GOOGLE_SHEET_URL non configuré");
       return;
     }
 
-    const csvUrl = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/export?format=csv`;
-
     try {
       // 1. Try to fetch fresh data
-      const response = await fetch(csvUrl);
+      const response = await fetch(GOOGLE_SHEET_URL);
       if (!response.ok) throw new Error('Erreur réseau');
       
       const text = await response.text();
@@ -44,7 +42,7 @@ function App() {
       console.log("Données mises à jour et sauvegardées.");
 
     } catch (error) {
-      console.log("Mode Hors-ligne activé, tentative de lecture du cache...");
+      console.log("Mode Hors-ligne activé, tentative de lecture du cache...", error);
       
       // 3. Fallback to LocalStorage
       const cachedData = localStorage.getItem('chr_gt_clients');
@@ -55,7 +53,9 @@ function App() {
         setLastUpdated(cachedDate);
         setIsOfflineMode(true);
       } else {
-        alert("Aucune connexion et aucune donnée en cache. Veuillez vous connecter une première fois.");
+        // If we are offline and have no cache, we can't do much, but we don't want to crash.
+        // Alert might be annoying if it pops up repeatedly, but good for first load fail.
+        console.warn("Aucune connexion et aucune donnée en cache.");
       }
     }
   };
