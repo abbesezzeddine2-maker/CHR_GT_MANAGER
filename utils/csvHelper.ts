@@ -8,47 +8,53 @@ export const extractSheetId = (url: string): string | null => {
 // Helper to transform Google Drive viewing links into direct image links
 const sanitizeLogoUrl = (url: string): string => {
   if (!url) return '';
-  
-  // Clean surrounding quotes if any remain
   const cleanUrl = url.replace(/^"|"$/g, '').trim();
-
-  // Regex to capture ID from various Google Drive/Docs URL formats
   const driveRegex = /(?:drive|docs)\.google\.com\/.*(?:id=|d\/)([a-zA-Z0-9_-]+)/;
   const match = cleanUrl.match(driveRegex);
-  
   if (match && match[1]) {
-    // Use thumbnail endpoint for general user-provided logos
     return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
   }
-  
-  // If no Drive ID found, return the original URL
   return cleanUrl;
 };
 
-// Robust CSV Line Parser
-const parseCSVLine = (text: string): string[] => {
-  // Split by comma, but ignore commas inside quotes
+// Robust CSV Line Parser that handles both comma and semicolon
+const parseCSVLine = (text: string, delimiter: string): string[] => {
+  // Regex dynamically based on delimiter
+  // This looks for delimiter followed by even number of quotes (to ignore delimiters inside quotes)
+  // Simple fallback split for speed if no quotes involved usually works for simple data, 
+  // but for robustness we stick to a simpler split if complex regex fails.
+  
+  if (delimiter === ';') {
+    return text.split(';').map(t => t.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+  }
+  
+  // Standard Comma CSV regex
   const pattern = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
   const fields = text.split(pattern);
-  
   return fields.map(field => {
     let val = field.trim();
-    // Remove surrounding quotes
     if (val.startsWith('"') && val.endsWith('"')) {
       val = val.slice(1, -1);
     }
-    // Handle escaped quotes ("") -> (")
     return val.replace(/""/g, '"');
   });
 };
 
 export const parseCSV = (csvText: string): Client[] => {
-  const lines = csvText.split(/\r?\n/); // Handle both \n and \r\n
+  const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
   if (lines.length === 0) return [];
 
-  // Parse headers using the robust parser
-  const headers = parseCSVLine(lines[0]);
+  // Detect delimiter based on first line
+  const firstLine = lines[0];
+  const commaCount = (firstLine.match(/,/g) || []).length;
+  const semiCount = (firstLine.match(/;/g) || []).length;
+  const delimiter = semiCount > commaCount ? ';' : ',';
+
+  // Parse headers
+  const headers = parseCSVLine(firstLine, delimiter);
   
+  console.log(`CSV Detected: Delimiter '${delimiter}', Headers found:`, headers);
+
   const clients: Client[] = [];
 
   const getColIndex = (keywords: string[]) => {
@@ -84,17 +90,14 @@ export const parseCSV = (csvText: string): Client[] => {
     lng: getColIndex(['Longitude', 'Long', 'Lng']),
     avgMonth: getColIndex(['Moy Achat par Mois', 'Moy Achat Mois', 'Moyenne Achat', 'CA Mensuel']),
     avgDel: getColIndex(['Moy Achat par Livraison', 'Moy Achat Liv', 'Moyenne Liv', 'Panier Moyen']),
-    logo: getColIndex(['Logo', 'Image', 'Photo', 'Lien Logo', 'Url Logo', 'Picture']),
+    logo: getColIndex(['Logo', 'Image', 'Photo']),
     free: getColIndex(['Gratuité', 'Gratuite', 'Free']),
   };
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
-    if (!line || line.trim() === '') continue;
-
-    const values = parseCSVLine(line);
+    const values = parseCSVLine(line, delimiter);
     
-    // Helper to safely get value at index
     const getValue = (index: number) => (index !== -1 && values[index]) ? values[index] : '';
 
     const latStr = getValue(idxMap.lat).replace(',', '.');
@@ -105,20 +108,15 @@ export const parseCSV = (csvText: string): Client[] => {
     
     const division = getValue(idxMap.division);
 
-    // Determine Logo based on Division (Override logic)
     let logoUrl = sanitizeLogoUrl(getValue(idxMap.logo));
     
-    // Specific brand logos based on Division ID
-    // Using thumbnail endpoint (sz=w500) for reliability instead of export=view
+    // Hardcoded overrides for brands
     if (division === 'O152') {
-      // Ben Yedder
       logoUrl = 'https://drive.google.com/thumbnail?id=1WLnyAQ0Y2Hv88COFP_0nOpnPnj5s0TfY&sz=w500';
     } else if (division === 'Y150') {
-      // Bondin
       logoUrl = 'https://drive.google.com/thumbnail?id=1vXFeon3UtAJgky8hX7Z9gRGKIBbngxnR&sz=w500';
     }
 
-    // Only add clients with valid coordinates
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
       clients.push({
         id: getValue(idxMap.code) || `row-${i}`,
