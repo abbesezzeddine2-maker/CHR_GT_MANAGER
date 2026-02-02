@@ -58,7 +58,6 @@ function App() {
       if (!fetchSuccess) {
         try {
           appendLog("Tentative 2: CorsProxy.io...");
-          // On encode deux fois pour être sûr avec certains proxies, mais une fois suffit souvent pour corsproxy
           const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(GOOGLE_SHEET_URL)}`;
           const response = await fetch(proxyUrl);
           if (response.ok) {
@@ -138,21 +137,24 @@ function App() {
   useEffect(() => {
     loadData();
     
-    // SW Update logic
+    // SW Update logic with error silencing for preview envs
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').then(reg => {
-        reg.addEventListener('updatefound', () => {
-          const newWorker = reg.installing;
-          if (newWorker) {
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                // New version available
-                console.log('New content is available; please refresh.');
-              }
-            });
-          }
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => {
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            if (newWorker) {
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  console.log('New content is available; please refresh.');
+                }
+              });
+            }
+          });
+        })
+        .catch(() => {
+          // Silently ignore SW errors (common in strict origin preview environments)
         });
-      });
     }
   }, []);
 
